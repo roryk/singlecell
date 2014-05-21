@@ -19,8 +19,12 @@ def get_r2_prepped_outfile(sample, alignment_dir):
     return os.path.join(alignment_dir,
                         ".".join([sample["sample_id"], sample["subsample_id"]]))
 
-def get_aligned_outfile(fastq_file):
+def get_bwa_outfile(fastq_file):
     return fastq_file + ".sam"
+
+def get_star_prefix(fastq_file):
+    base, _ = os.path.splitext(fastq_file)
+    return base
 
 def get_cleaned_outfile(align_file):
     base, ext = os.path.splitext(align_file)
@@ -49,11 +53,13 @@ def barcodes_to_plate_well(barcode_file):
 if __name__ == "__main__":
     parser = ArgumentParser(description="Run a single cell analysis.")
     parser.add_argument("--sample-map", required=True, help="Sample map file.")
-    parser.add_argument("--bwa-ref", help="Path to bwa index")
+    parser.add_argument("--aligner", default="bwa",
+                        choices=["bwa", "star"], help="Aligner to use.")
+    parser.add_argument("--aligner-index", help="Path to aligner index.")
     parser.add_argument("--alignment-dir", help="Output directory")
     parser.add_argument("--gtf-file", required=True, help="GTF file")
     parser.add_argument("--plate-file", required=True, help="Plate file")
-    parser.add_argument("--cores", required=True, help="Number of cores to use.")
+    parser.add_argument("--cores", default=1, help="Number of cores to use.")
     args = parser.parse_args()
 
     samples = get_samples_to_process(args.sample_map)
@@ -73,11 +79,15 @@ if __name__ == "__main__":
     print "Beginning alignment."
     aligned = []
     for prep in prepped:
-        out_file = get_aligned_outfile(prep)
-        print ("aligning %s to %s with bwa and writing to  %s." % (prep,
-                                                                   args.bwa_ref,
-                                                                   out_file))
-        aligned.append(align.bwa_align(prep, args.bwa_ref, out_file))
+        print ("aligning %s to %s with %s." % (prep, args.aligner_index,
+                                               args.aligner))
+        if args.aligner == "bwa":
+            aligned.append(align.bwa_align(prep, args.aligner_index,
+                                           get_bwa_outfile(prep), args.cores))
+        elif args.aligner == "star":
+            aligned.append(align.star_align(prep, args.aligner_index,
+                                            get_star_prefix(prep), args.cores))
+
     print "Finished alignment."
 
     print "Begin cleaning of poorly mapped reads."

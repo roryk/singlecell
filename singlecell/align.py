@@ -10,6 +10,23 @@ polyA_tail_pattern = re.compile(r"A{20,}$")
 MAX_EDIT_DISTANCE = 1
 MAX_BEST = 10
 
+
+def star_align(fastq_path, reference_prefix, out_prefix, cores=1):
+    max_best = MAX_BEST
+    out_file = out_prefix + "Aligned.out.sam"
+    if file_exists(out_file):
+        print ("%s has already been aligned, skipping." % (fastq_path))
+        return out_file
+
+    cmd = ("STAR --genomeDir {reference_prefix} --readFilesIn {fastq_path} "
+           "--runThreadN {cores} --outFileNamePrefix {out_prefix} "
+           "--outFilterMultimapNmax {max_best} "
+           "--outSAMattributes NH HI NM MD AS "
+           "--outSAMstrandField intronMotif").format(**locals())
+    do.run(cmd, "Aligning %s to %s with STAR" % (fastq_path, reference_prefix),
+           None)
+    return out_file
+
 def bwa_align(fastq_path, reference_prefix, out_file, cores=1):
     edit_distance = MAX_EDIT_DISTANCE
     if file_exists(out_file):
