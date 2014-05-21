@@ -3,6 +3,7 @@ from bcbio.distributed.transaction import file_transaction
 from bcbio.bam import fastq
 from bcbio.utils import file_exists, safe_makedir
 import os
+import itertools
 
 # accepted_barcode_pattern = re.compile(r"[ACGT]+[ACG]$")
 # polyA_tail_pattern = re.compile(r"A{20,}$")
@@ -31,9 +32,11 @@ def prep_r2_with_barcode(fq1, fq2, out_file):
 
     safe_makedir(os.path.dirname(out_file))
     if file_exists(out_file):
+        print ("%s and %s have already been barcode-prepped, skipping."
+               % (fq1, fq2))
         return out_file
 
-    with bam.fastq.open_fastq(fq1) as r1_file, bam.fastq.open_fastq(fq2) as r2_file:
+    with fastq.open_fastq(fq1) as r1_file, fastq.open_fastq(fq2) as r2_file:
         with file_transaction(out_file) as tx_out_file:
             out_handle = open(tx_out_file, "w")
             read_count = 0
@@ -48,7 +51,7 @@ def prep_r2_with_barcode(fq1, fq2, out_file):
                 assert read_name1 == read_name2, "FASTQ files may be out of order."
                 seq2, qual2 = seq2.rstrip(), qual2.rstrip()
                 barcode, seq, qual = mask(seq1[0:6], qual1[0:6], min_qual=10) + \
-                                     mask(seq1[6:r1_length], qual1[6:r1_length]), seq2, qual2
+                                     mask(seq1[6:], qual1[6:]), seq2, qual2
                 barcoded_name = ":".join([read_name2, barcode])
 
                 print(format_fastq([barcoded_name, seq, qual]), file=out_handle)

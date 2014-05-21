@@ -1,20 +1,84 @@
 import re
 from bcbio.provenance import do
+from bcbio.distributed.transaction import file_transaction
 from bcbio.utils import file_exists
+import pysam
+import os
 
 accepted_barcode_pattern = re.compile(r"[ACGT]+[ACG]$")
 polyA_tail_pattern = re.compile(r"A{20,}$")
-max_edit_dist = 1
-max_best = 10
+MAX_EDIT_DISTANCE = 1
+MAX_BEST = 10
 
-def bwa_align(fastq_path, reference_prefix, alignment_dir):
-    out_file = fastq_path + ".sam"
+def bwa_align(fastq_path, reference_prefix, out_file, cores=1):
+    edit_distance = MAX_EDIT_DISTANCE
     if file_exists(out_file):
+        print ("%s has already been aligned, skipping." % (fastq_path))
         return out_file
 
-    cmd = ("bwa aln -l 24 {reference_prefix} {fastq_path} | "
-           "bwa samse {reference_prefix} - {fastq_path} "
-           "> {fastq_path}.sam").format(**locals())
-    do.run(cmd, "Aligning %s to %s with bwa." % (fastq_path, reference_prefix),
-           None)
+    with file_transaction(out_file) as tx_out_file:
+
+        cmd = ("bwa aln -n {edit_distance} -l 24 {reference_prefix} "
+               "{fastq_path} -t {cores} | bwa samse {reference_prefix} - {fastq_path} "
+               "> {tx_out_file}").format(**locals())
+        do.run(cmd, "Aligning %s to %s with bwa." % (fastq_path, reference_prefix),
+               None)
     return out_file
+
+def clean_align(align_file, out_file):
+    seen = {}
+    duped = {}
+    if file_exists(out_file):
+        print ("%s has already been UMI deduped, skipping." % (align_file))
+        return out_file
+
+    count_total_reads = 0
+    count_assigned_reads = 0
+    count_assigned_aligned_reads = 0
+    with pysam.Samfile(align_file, "r") as in_handle, file_transaction(out_file) as tx_out_file:
+        out_handle = pysam.Samfile(tx_out_file, "wh", template=in_handle)
+        for read in in_handle:
+            count_total_reads += 1
+            # if unassigned_read(read, barcode_to_well):
+            #     continue
+            count_assigned_reads += 1
+            if poorly_mapped_read(read):
+                continue
+            count_assigned_aligned_reads += 1
+            out_handle.write(read)
+        out_handle.close
+
+    # stats_file = os.path.join(os.path.dirname(out_file), "log.dat")
+
+    # with open(stats_file, "a") as stats_handle:
+    #     print("%s,%s" % ("Total", count_total_reads), file=stats_handle)
+    #     print("%s,%s" % ("Assigned", count_assigned_reads), file=stats_handle)
+    #     print("%s,%s" % ("Aligned", count_aligned_reads), file=stats_handle)
+
+    return out_file
+
+def unassigned_read(read, barcode_to_well):
+    barcode = read.qname.split(":")[-1]
+    if not re.match(accepted_barcode_pattern, barcode):
+        return True
+    well = barcode_to_well.get(barcode[0:6], None)
+    if not well:
+        return True
+    return False
+
+def poorly_mapped_read(read):
+    if read.is_unmapped:
+        return True
+    nm = get_tag(read, "NM")
+    if nm and (nm > MAX_EDIT_DISTANCE):
+        print "Edit: %s" % nm
+        return True
+    x0 = get_tag(read, "X0")
+    if x0 and (x0 > MAX_BEST):
+        print "Multi: %s" % x0
+        return True
+    return False
+
+def get_tag(read, tag):
+    matched_tag = [x for x in read.tags if tag == x[0]]
+    return matched_tag[0][1] if matched_tag else None
