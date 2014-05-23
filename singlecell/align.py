@@ -88,11 +88,9 @@ def poorly_mapped_read(read):
         return True
     nm = get_tag(read, "NM")
     if nm and (nm > MAX_EDIT_DISTANCE):
-        print "Edit: %s" % nm
         return True
     x0 = get_tag(read, "X0")
     if x0 and (x0 > MAX_BEST):
-        print "Multi: %s" % x0
         return True
     return False
 

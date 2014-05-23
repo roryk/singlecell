@@ -9,18 +9,23 @@ import os
 import pysam
 
 
-def htseq_count(sam_file, gtf_file):
+def htseq_count(sam_file, gtf_file, multimappers=False):
     base, _ = os.path.splitext(sam_file)
     out_file = base + ".counted.sam"
     count_file = sam_file + ".counts"
     htseq_file = out_file + ".tmp"
     if file_exists(out_file):
         return out_file
+    if multimappers:
+        mm_flag = " --multimappers=yes "
+    else:
+        mm_flag = ""
     with file_transaction([count_file, htseq_file]) as tx_files:
         tx_count_file = tx_files[0]
         tx_htseq_file = tx_files[1]
         cmd = ("htseq-count --stranded=no --format=sam --samout={tx_htseq_file} "
-               " {sam_file} {gtf_file} > {tx_count_file}")
+               " --minaqual=0 --mode=intersection-nonempty "
+               " {mm_flag} {sam_file} {gtf_file} > {tx_count_file}")
         message = "Count reads in {sam_file} mapping to {gtf_file}."
         do.run(cmd.format(**locals()), message.format(**locals()))
     fixed_file = fix_header(sam_file, htseq_file)

@@ -52,6 +52,8 @@ def barcodes_to_plate_well(barcode_file):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Run a single cell analysis.")
+    parser.add_argument("--multimappers", action="store_true",
+                        default=False, help="Keep multimappers")
     parser.add_argument("--sample-map", required=True, help="Sample map file.")
     parser.add_argument("--aligner", default="bwa",
                         choices=["bwa", "star"], help="Aligner to use.")
@@ -100,7 +102,7 @@ if __name__ == "__main__":
     print "Tagging reads that map to features in the GTF file."
     tagged = []
     for sam_file in cleaned:
-        tagged.append(count.htseq_count(sam_file, args.gtf_file))
+        tagged.append(count.htseq_count(sam_file, args.gtf_file, args.multimappers))
     print "Finished tagging reads."
 
     print "Reading feature names and barcodes."
@@ -113,6 +115,4 @@ if __name__ == "__main__":
     for tag_file in tagged:
         counted.append(count.count_reads(tag_file, feature_names, barcode_to_well))
     print "Finished counting UMI."
-
-
 
