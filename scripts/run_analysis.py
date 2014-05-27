@@ -99,20 +99,26 @@ if __name__ == "__main__":
         cleaned.append(align.clean_align(sam_file, get_cleaned_outfile(sam_file)))
     print "Finished cleaning."
 
-    print "Tagging reads that map to features in the GTF file."
-    tagged = []
-    for sam_file in cleaned:
-        tagged.append(count.htseq_count(sam_file, args.gtf_file, args.multimappers))
-    print "Finished tagging reads."
+    # print "Tagging reads that map to features in the GTF file."
+    # tagged = []
+    # for sam_file in cleaned:
+    #     tagged.append(count.htseq_count(sam_file, args.gtf_file, args.multimappers))
+    # print "Finished tagging reads."
 
     print "Reading feature names and barcodes."
-    feature_names = get_feature_names(args.gtf_file)
+#    feature_names = get_feature_names(args.gtf_file)
     barcode_to_well = barcodes_to_plate_well(args.plate_file)
     print "Finished reading feature names and barcodes."
 
+    # print "Counting unique UMI mapping to features."
+    # counted = []
+    # for tag_file in tagged:
+    #     counted.append(count.count_reads(tag_file, feature_names, barcode_to_well))
+    # print "Finished counting UMI."
+
     print "Counting unique UMI mapping to features."
     counted = []
-    for tag_file in tagged:
-        counted.append(count.count_reads(tag_file, feature_names, barcode_to_well))
+    for sam_file in cleaned:
+        counted.append(count.count_umi(sam_file, args.gtf_file, barcode_to_well))
     print "Finished counting UMI."
 
