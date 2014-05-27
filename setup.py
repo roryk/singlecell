@@ -10,5 +10,6 @@ setup(
     name = "singlecell",
     version = "0.0.1",
     packages=["singlecell"],
-    install_requires=["HTSeq"]
+    install_requires=["HTSeq",
+                      "ipython-cluster-helper"]
 )

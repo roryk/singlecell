@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from singlecell import barcode, align, count
+from singlecell import barcode, align, count, cluster
 import os
 import glob
 from collections import OrderedDict
@@ -49,50 +49,68 @@ if __name__ == "__main__":
     parser.add_argument("--alignment-dir", help="Output directory")
     parser.add_argument("--gtf-file", required=True, help="GTF file")
     parser.add_argument("--plate-file", required=True, help="Plate file")
-    parser.add_argument("--cores", default=1, help="Number of cores to use.")
+    parser.add_argument("--num-jobs", type=int,
+                        default=1, help="Number of concurrent jobs to process.")
+    parser.add_argument("--cores-per-job", type=int,
+                        default=1, help="Number of cores to use.")
+    parser.add_argument("--memory-per-job", default=2, help="Memory in GB to reserve per job.")
+    parser.add_argument("--timeout", default=15, help="Time to wait before giving up starting.")
+    parser.add_argument("--scheduler", default=None, help="Type of scheduler to use.",
+                        choices=["lsf", "slurm", "torque", "sge"])
+    parser.add_argument("--resources", default=None, help="Extra scheduler resource flags.")
+    parser.add_argument("--queue", default=None, help="Queue to submit jobs to.")
+    parser.add_argument("--local", action="store_true", default=False,
+                        help="Run in parallel on a local machine.")
+
     args = parser.parse_args()
 
     samples = get_samples_to_process(args.sample_map)
     prepped = []
 
-    print "Beginning barcode preparation."
-    for sample in samples:
-        fq1 = sample["r1_path"]
-        fq2 = sample["r2_path"]
-        out_file = get_r2_prepped_outfile(sample, args.alignment_dir)
-        print ("barcode-prepping %s and %s to %s." % (fq1, fq2, out_file))
-        prepped.append(barcode.prep_r2_with_barcode(sample["r1_path"],
-                                                    sample["r2_path"],
-                                                    get_r2_prepped_outfile(sample, args.alignment_dir)))
-    print "Finshed barcode preparation."
+    print "Starting IPython cluster. This may take a while."
+    with cluster.get_cluster_view(args) as view:
+        print "IPython cluster is up."
 
-    print "Beginning alignment."
-    aligned = []
-    for prep in prepped:
-        print ("aligning %s to %s with %s." % (prep, args.aligner_index,
-                                               args.aligner))
-        if args.aligner == "bwa":
-            aligned.append(align.bwa_align(prep, args.aligner_index,
-                                           get_bwa_outfile(prep), args.cores))
-        elif args.aligner == "star":
-            aligned.append(align.star_align(prep, args.aligner_index,
-                                            get_star_prefix(prep), args.cores))
+        print "Beginning barcode preparation."
+        for sample in samples:
+            fq1 = sample["r1_path"]
+            fq2 = sample["r2_path"]
+            out_file = get_r2_prepped_outfile(sample, args.alignment_dir)
+            print ("barcode-prepping %s and %s to %s." % (fq1, fq2, out_file))
+            prepped.append(view.apply_async(barcode.prep_r2_with_barcode,
+                                            sample["r1_path"],
+                                            sample["r2_path"],
+                                            get_r2_prepped_outfile(sample, args.alignment_dir)))
+        prepped = cluster.wait_until_complete(prepped)
+        print "Finshed barcode preparation."
 
-    print "Finished alignment."
+        print "Beginning alignment."
+        aligned = []
+        for prep in prepped:
+            print ("aligning %s to %s with %s." % (prep, args.aligner_index,
+                                                   args.aligner))
+            if args.aligner == "bwa":
+                aligned.append(align.bwa_align(prep, args.aligner_index,
+                                               get_bwa_outfile(prep), args.cores_per_job))
+            elif args.aligner == "star":
+                aligned.append(align.star_align(prep, args.aligner_index,
+                                                get_star_prefix(prep), args.cores_per_job))
 
-    print "Begin cleaning of poorly mapped reads."
-    cleaned = []
-    for sam_file in aligned:
-        print ("Cleaning %s, removing poorly mapped reads." % align)
-        cleaned.append(align.clean_align(sam_file, get_cleaned_outfile(sam_file)))
-    print "Finished cleaning."
+        print "Finished alignment."
 
-    print "Reading barcode to well mapping."
-    barcode_to_well = barcodes_to_plate_well(args.plate_file)
-    print "Finished reading feature names and barcodes."
+        print "Begin cleaning of poorly mapped reads."
+        cleaned = []
+        for sam_file in aligned:
+            print ("Cleaning %s, removing poorly mapped reads." % align)
+            cleaned.append(align.clean_align(sam_file, get_cleaned_outfile(sam_file)))
+        print "Finished cleaning."
 
-    print "Counting unique UMI mapping to features."
-    counted = []
-    for sam_file in cleaned:
-        counted.append(count.count_umi(sam_file, args.gtf_file, barcode_to_well))
-    print "Finished counting UMI."
+        print "Reading barcode to well mapping."
+        barcode_to_well = barcodes_to_plate_well(args.plate_file)
+        print "Finished reading feature names and barcodes."
+
+        print "Counting unique UMI mapping to features."
+        counted = []
+        for sam_file in cleaned:
+            counted.append(count.count_umi(sam_file, args.gtf_file, barcode_to_well))
+        print "Finished counting UMI."
