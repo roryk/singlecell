@@ -30,17 +30,6 @@ def get_cleaned_outfile(align_file):
     base, ext = os.path.splitext(align_file)
     return base + ".cleaned" + ext
 
-def get_feature_names(gtf_file):
-    features = set()
-    with open(gtf_file) as in_handle:
-        for line in in_handle:
-            info = line.split("\t")[8]
-            info_fields = info.split(";")
-            feature_field = filter(lambda x: x.startswith("gene_id"), info_fields)[0]
-            feature = feature_field.split()[1].strip()
-            features.add(feature.replace("\"", ""))
-    return sorted(list(features))
-
 def barcodes_to_plate_well(barcode_file):
     barcodes = OrderedDict()
     with open(barcode_file) as in_handle:
@@ -66,7 +55,7 @@ if __name__ == "__main__":
 
     samples = get_samples_to_process(args.sample_map)
     prepped = []
-    # prep barcodes
+
     print "Beginning barcode preparation."
     for sample in samples:
         fq1 = sample["r1_path"]
@@ -99,22 +88,9 @@ if __name__ == "__main__":
         cleaned.append(align.clean_align(sam_file, get_cleaned_outfile(sam_file)))
     print "Finished cleaning."
 
-    # print "Tagging reads that map to features in the GTF file."
-    # tagged = []
-    # for sam_file in cleaned:
-    #     tagged.append(count.htseq_count(sam_file, args.gtf_file, args.multimappers))
-    # print "Finished tagging reads."
-
-    print "Reading feature names and barcodes."
-#    feature_names = get_feature_names(args.gtf_file)
+    print "Reading barcode to well mapping."
     barcode_to_well = barcodes_to_plate_well(args.plate_file)
     print "Finished reading feature names and barcodes."
-
-    # print "Counting unique UMI mapping to features."
-    # counted = []
-    # for tag_file in tagged:
-    #     counted.append(count.count_reads(tag_file, feature_names, barcode_to_well))
-    # print "Finished counting UMI."
 
     print "Counting unique UMI mapping to features."
     counted = []
