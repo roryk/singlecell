@@ -38,7 +38,6 @@ def barcodes_to_plate_well(barcode_file):
             barcodes[tokens[2]] = "_".join(tokens[0:2])
     return barcodes
 
-
 if __name__ == "__main__":
     parser = ArgumentParser(description="Run a single cell analysis.")
     parser.add_argument("--multimappers", action="store_true",
@@ -97,4 +96,3 @@ if __name__ == "__main__":
     for sam_file in cleaned:
         counted.append(count.count_umi(sam_file, args.gtf_file, barcode_to_well))
     print "Finished counting UMI."
-

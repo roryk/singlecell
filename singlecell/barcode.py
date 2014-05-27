@@ -1,24 +1,7 @@
 from __future__ import print_function
-from bcbio.distributed.transaction import file_transaction
-from bcbio.bam import fastq
-from bcbio.utils import file_exists, safe_makedir
+from utils import file_transaction, safe_makedir, file_exists
 import os
 import itertools
-
-# accepted_barcode_pattern = re.compile(r"[ACGT]+[ACG]$")
-# polyA_tail_pattern = re.compile(r"A{20,}$")
-# max_edit_dist = 1
-# max_best = 10
-
-# def prep_barcodes(bamfile, out_dir, sample_id, ercc_dict, refseq_dict):
-#     "read an alignment file and calculate a set of the UMI mapping to reads"
-#     with bam.open_samfile(bamfile) as in_handle:
-#         for read in in_handle:
-
-
-# def skip_read(read):
-#     barcode =
-#     read.is_unmapped or re.match(accepted_barcode_pattern
 
 def format_fastq(buf):
     name, seq, qual = buf
@@ -36,7 +19,7 @@ def prep_r2_with_barcode(fq1, fq2, out_file):
                % (fq1, fq2))
         return out_file
 
-    with fastq.open_fastq(fq1) as r1_file, fastq.open_fastq(fq2) as r2_file:
+    with open_fastq(fq1) as r1_file, open_fastq(fq2) as r2_file:
         with file_transaction(out_file) as tx_out_file:
             out_handle = open(tx_out_file, "w")
             read_count = 0
@@ -57,3 +40,13 @@ def prep_r2_with_barcode(fq1, fq2, out_file):
                 print(format_fastq([barcoded_name, seq, qual]), file=out_handle)
             out_handle.close()
     return out_file
+
+def open_fastq(in_file):
+    """ open a fastq file, using gzip if it is gzipped
+    """
+    _, ext = os.path.splitext(in_file)
+    if ext == ".gz":
+        return gzip.open(in_file, 'rb')
+    if ext in [".fastq", ".fq"]:
+        return open(in_file, 'r')
+

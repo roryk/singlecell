@@ -1,7 +1,5 @@
 from __future__ import print_function
-from bcbio.distributed.transaction import file_transaction
-from bcbio.provenance import do
-from bcbio.utils import file_exists
+from utils import file_transaction, file_exists
 from collections import defaultdict, Counter
 import os
 import HTSeq

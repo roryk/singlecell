@@ -1,9 +1,8 @@
 import re
-from bcbio.provenance import do
-from bcbio.distributed.transaction import file_transaction
-from bcbio.utils import file_exists
+from utils import file_transaction, file_exists
 import pysam
 import os
+import subprocess
 
 accepted_barcode_pattern = re.compile(r"[ACGT]+[ACG]$")
 polyA_tail_pattern = re.compile(r"A{20,}$")
@@ -23,8 +22,7 @@ def star_align(fastq_path, reference_prefix, out_prefix, cores=1):
            "--outFilterMultimapNmax {max_best} "
            "--outSAMattributes NH HI NM MD AS "
            "--outSAMstrandField intronMotif").format(**locals())
-    do.run(cmd, "Aligning %s to %s with STAR" % (fastq_path, reference_prefix),
-           None)
+    subprocess.check_call(cmd, shell=True)
     return out_file
 
 def bwa_align(fastq_path, reference_prefix, out_file, cores=1):
@@ -38,8 +36,7 @@ def bwa_align(fastq_path, reference_prefix, out_file, cores=1):
         cmd = ("bwa aln -n {edit_distance} -l 24 {reference_prefix} "
                "{fastq_path} -t {cores} | bwa samse {reference_prefix} - {fastq_path} "
                "> {tx_out_file}").format(**locals())
-        do.run(cmd, "Aligning %s to %s with bwa." % (fastq_path, reference_prefix),
-               None)
+        subprocess.check_call(cmd, shell=True)
     return out_file
 
 def clean_align(align_file, out_file):
@@ -56,21 +53,12 @@ def clean_align(align_file, out_file):
         out_handle = pysam.Samfile(tx_out_file, "wh", template=in_handle)
         for read in in_handle:
             count_total_reads += 1
-            # if unassigned_read(read, barcode_to_well):
-            #     continue
             count_assigned_reads += 1
             if poorly_mapped_read(read):
                 continue
             count_assigned_aligned_reads += 1
             out_handle.write(read)
         out_handle.close
-
-    # stats_file = os.path.join(os.path.dirname(out_file), "log.dat")
-
-    # with open(stats_file, "a") as stats_handle:
-    #     print("%s,%s" % ("Total", count_total_reads), file=stats_handle)
-    #     print("%s,%s" % ("Assigned", count_assigned_reads), file=stats_handle)
-    #     print("%s,%s" % ("Aligned", count_aligned_reads), file=stats_handle)
 
     return out_file
 
