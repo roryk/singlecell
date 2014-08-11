@@ -2,6 +2,7 @@ from __future__ import print_function
 from utils import file_transaction, safe_makedir, file_exists
 import os
 import itertools
+import gzip
 
 def format_fastq(buf):
     name, seq, qual = buf
