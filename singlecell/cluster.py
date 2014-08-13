@@ -3,6 +3,7 @@ from cluster_helper import cluster as ipc
 def get_cluster_view(args):
     return ipc.cluster_view(args.scheduler.lower(), args.queue,
                           args.num_jobs, args.cores_per_job,
+                          start_wait=args.timeout,
                           extra_params={"resources": args.resources,
                                         "mem": args.memory_per_job,
                                         "tag": "singlecell",
