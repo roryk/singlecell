@@ -11,5 +11,6 @@ setup(
     version = "0.0.1",
     packages=["singlecell"],
     install_requires=["HTSeq",
-                      "ipython-cluster-helper"]
+                      "ipython-cluster-helper"],
+    scripts=['scripts/run_analysis.py']
 )
