@@ -90,19 +90,20 @@ if __name__ == "__main__":
             print ("aligning %s to %s with %s." % (prep, args.aligner_index,
                                                    args.aligner))
             if args.aligner == "bwa":
-                aligned.append(align.bwa_align(prep, args.aligner_index,
-                                               get_bwa_outfile(prep), args.cores_per_job))
+                aligned.append(view.apply_async(align.bwa_align, prep, args.aligner_index,
+                                                   get_bwa_outfile(prep), args.cores_per_job))
             elif args.aligner == "star":
-                aligned.append(align.star_align(prep, args.aligner_index,
+                aligned.append(view.apply_async(align.star_align, prep, args.aligner_index,
                                                 get_star_prefix(prep), args.cores_per_job))
-
+        aligned = cluster.wait_until_complete(aligned)
         print "Finished alignment."
 
         print "Begin cleaning of poorly mapped reads."
         cleaned = []
         for sam_file in aligned:
-            print ("Cleaning %s, removing poorly mapped reads." % align)
-            cleaned.append(align.clean_align(sam_file, get_cleaned_outfile(sam_file)))
+            print ("Cleaning %s, removing poorly mapped reads." % sam_file)
+            cleaned.append(view.apply_async(align.clean_align, sam_file, get_cleaned_outfile(sam_file)))
+        cleaned = cluster.wait_until_complete(cleaned)
         print "Finished cleaning."
 
         print "Reading barcode to well mapping."
@@ -112,5 +113,6 @@ if __name__ == "__main__":
         print "Counting unique UMI mapping to features."
         counted = []
         for sam_file in cleaned:
-            counted.append(count.count_umi(sam_file, args.gtf_file, barcode_to_well))
+            counted.append(view.apply_async(count.count_umi, sam_file, args.gtf_file, barcode_to_well))
+        counted = cluster.wait_until_complete(counted)
         print "Finished counting UMI."
