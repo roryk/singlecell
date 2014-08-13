@@ -64,6 +64,10 @@ def get_feature_names(gtf_file):
     return sorted(list(features))
 
 def get_barcode_and_umi(read):
+    """
+    from the paper the identifier is
+    BARCODE[6]-UMI[10]-[T or A 10]
+    """
     identifier = read.read.name.split(":")[-1]
-    return identifier[0:6], identifier[6:]
+    return identifier[0:6], identifier[6:16]
 
