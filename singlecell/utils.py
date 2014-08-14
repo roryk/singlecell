@@ -12,6 +12,7 @@ import os
 import shutil
 import tempfile
 import contextlib
+import time
 
 @contextlib.contextmanager
 def file_transaction(*rollback_files):
