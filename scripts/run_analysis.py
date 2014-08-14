@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from singlecell import barcode, align, count, cluster
+from singlecell.barcode import barcodes_to_plate_well
 import os
 import glob
 from collections import OrderedDict
@@ -30,7 +31,6 @@ def get_cleaned_outfile(align_file):
     base, ext = os.path.splitext(align_file)
     return base + ".cleaned" + ext
 
-def barcodes_to_plate_well(barcode_file):
     barcodes = OrderedDict()
     with open(barcode_file) as in_handle:
         for line in in_handle:
