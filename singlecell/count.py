@@ -2,6 +2,7 @@ from __future__ import print_function
 from utils import file_transaction, file_exists
 from collections import defaultdict, Counter
 import os
+import gzip
 import HTSeq
 
 def count_umi(sam_file, gtf_file, barcode_to_well, multimappers=False):
@@ -10,11 +11,12 @@ def count_umi(sam_file, gtf_file, barcode_to_well, multimappers=False):
     """
     base, _ = os.path.splitext(sam_file)
     out_file = base + ".counts"
+    out_umi_file = base + ".counts_umi"
     if file_exists(out_file):
         return out_file
-
     wells = sorted(barcode_to_well.values())
     seen_umi = defaultdict(set)
+    seen_umi_list = defaultdict(Counter)
     exons = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     gtf_handle = HTSeq.GFF_Reader(gtf_file)
     for feature in gtf_handle:
@@ -44,13 +46,23 @@ def count_umi(sam_file, gtf_file, barcode_to_well, multimappers=False):
             if barcode not in barcode_to_well:
                 continue
             seen_umi[(list(fs)[0], barcode_to_well[barcode])].add(umi)
-
+            seen_umi_list[(list(fs)[0], barcode_to_well[barcode])][umi] += 1
+    write_extensive_summary(seen_umi_list, out_umi_file)
     with file_transaction(out_file) as tx_out_file:
-        with open(tx_out_file, "w") as out_handle:
-            print("\t".join(["feature"] + wells), file=out_handle)
-            for feature in get_feature_names(gtf_file):
-                counts = [len(seen_umi[(feature, well)]) for well in wells]
-                print("\t".join([feature] + map(str, counts)), file=out_handle)
+            with open(tx_out_file, "w") as out_handle:
+                print("\t".join(["feature"] + wells), file=out_handle)
+                for feature in get_feature_names(gtf_file):
+                    counts = [len(seen_umi[(feature, well)]) for well in wells]
+                    print("\t".join([feature] + map(str, counts)), file=out_handle)
+
+
+def write_extensive_summary(well_umi_gen, out_file):
+    with file_transaction(out_file) as tx_out_file:
+        with gzip.open(tx_out_file, 'wb') as out_handle:
+            well_umi_gen_str = [[("\t%s\t%s\t" % (gen_well[0], gen_well[1])).join(map(str, umi)) for umi in well_umi_gen[gen_well].items()] for gen_well in well_umi_gen]
+            out_handle.write("\n".join([item[0] for item in well_umi_gen_str]))
+            out_handle.write("\n")
+
 
 def get_feature_names(gtf_file):
     features = set()
@@ -62,6 +74,7 @@ def get_feature_names(gtf_file):
             feature = feature_field.split()[1].strip()
             features.add(feature.replace("\"", ""))
     return sorted(list(features))
+
 
 def get_barcode_and_umi(read):
     """
