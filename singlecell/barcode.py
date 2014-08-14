@@ -3,6 +3,16 @@ from utils import file_transaction, safe_makedir, file_exists
 import os
 import itertools
 import gzip
+from collections import OrderedDict
+
+
+def barcodes_to_plate_well(barcode_file):
+    barcodes = OrderedDict()
+    with open(barcode_file) as in_handle:
+        for line in in_handle:
+            tokens = line.split()
+            barcodes[tokens[2]] = "_".join(tokens[0:2])
+    return barcodes
 
 def format_fastq(buf):
     name, seq, qual = buf
