@@ -60,7 +60,7 @@ def write_extensive_summary(well_umi_gen, out_file):
     with file_transaction(out_file) as tx_out_file:
         with gzip.open(tx_out_file, 'wb') as out_handle:
             well_umi_gen_str = [[("\t%s\t%s\t" % (gen_well[0], gen_well[1])).join(map(str, umi)) for umi in well_umi_gen[gen_well].items()] for gen_well in well_umi_gen]
-            out_handle.write("\n".join([item[0] for item in well_umi_gen_str]))
+            out_handle.write("\n".join(["\n".join(item) for item in well_umi_gen_str]))
             out_handle.write("\n")
 
 
