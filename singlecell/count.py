@@ -5,13 +5,14 @@ import os
 import gzip
 import HTSeq
 
+
 def count_umi(sam_file, gtf_file, barcode_to_well, multimappers=False):
     """
     stripped down implementation of the HTSeq algorithm for counting
     """
     base, _ = os.path.splitext(sam_file)
     out_file = base + ".counts"
-    out_umi_file = base + ".counts_umi"
+    out_umi_file = base + ".counts_umi.gz"
     if file_exists(out_file):
         return out_file
     wells = sorted(barcode_to_well.values())
