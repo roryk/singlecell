@@ -13,11 +13,13 @@ def count_umi(sam_file, gtf_file, barcode_to_well, multimappers=False):
     base, _ = os.path.splitext(sam_file)
     out_file = base + ".counts"
     out_umi_file = base + ".counts_umi.gz"
+    out_umi_pos_file = base + ".counts_umi_pos.gz"
     if file_exists(out_file):
         return out_file
     wells = sorted(barcode_to_well.values())
     seen_umi = defaultdict(set)
     seen_umi_list = defaultdict(Counter)
+    seen_umi_pos_list = defaultdict(Counter)
     exons = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     gtf_handle = HTSeq.GFF_Reader(gtf_file)
     for feature in gtf_handle:
@@ -43,12 +45,16 @@ def count_umi(sam_file, gtf_file, barcode_to_well, multimappers=False):
                 else:
                     fs = fs.intersection(fs2)
         if len(fs) == 1:
+            fields = read.original_sam_line.split("\t")
+            position = "%s:%s" % (fields[2], fields[3])
             barcode, umi = get_barcode_and_umi(read)
             if barcode not in barcode_to_well:
                 continue
             seen_umi[(list(fs)[0], barcode_to_well[barcode])].add(umi)
             seen_umi_list[(list(fs)[0], barcode_to_well[barcode])][umi] += 1
+            seen_umi_pos_list[(position, barcode_to_well[barcode], list(fs)[0])][umi] += 1
     write_extensive_summary(seen_umi_list, out_umi_file)
+    write_extensive_summary_by_pos(seen_umi_pos_list, out_umi_pos_file)
     with file_transaction(out_file) as tx_out_file:
             with open(tx_out_file, "w") as out_handle:
                 print("\t".join(["feature"] + wells), file=out_handle)
@@ -61,6 +67,14 @@ def write_extensive_summary(well_umi_gen, out_file):
     with file_transaction(out_file) as tx_out_file:
         with gzip.open(tx_out_file, 'wb') as out_handle:
             well_umi_gen_str = [[("\t%s\t%s\t" % (gen_well[0], gen_well[1])).join(map(str, umi)) for umi in well_umi_gen[gen_well].items()] for gen_well in well_umi_gen]
+            out_handle.write("\n".join(["\n".join(item) for item in well_umi_gen_str]))
+            out_handle.write("\n")
+
+
+def write_extensive_summary_by_pos(well_umi_gen, out_file):
+    with file_transaction(out_file) as tx_out_file:
+        with gzip.open(tx_out_file, 'wb') as out_handle:
+            well_umi_gen_str = [[("\t%s\t%s\t%s\t" % (gen_well[0], gen_well[1], gen_well[2])).join(map(str, umi)) for umi in well_umi_gen[gen_well].items()] for gen_well in well_umi_gen]
             out_handle.write("\n".join(["\n".join(item) for item in well_umi_gen_str]))
             out_handle.write("\n")
 
