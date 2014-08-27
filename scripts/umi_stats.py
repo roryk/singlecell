@@ -45,8 +45,12 @@ def write_summary(umi_well):
 
 def merge_umis(umi_well):
     """merge umis with 1-edit-distance on the same genome position"""
+    num_umis_red = 0
+    tot_diff_umis_before = 0
+    tot_diff_umis_after = 0
     for read in umi_well:
         umi_list = Counter(umi_well[read].umi)
+        tot_diff_umis_before += len(umi_list)
         logger.debug("merge_umis: popular %s" % [read[1], umi_well[read].gene])
         logger.debug("merge_umis: related umi to a position: %s" % umi_list.keys())
         logger.debug("merge_umis: initial counts: %s" % umi_list)
@@ -56,7 +60,13 @@ def merge_umis(umi_well):
             logger.debug("merge_umis: conflict")
             umi_list = calc_num_umi(prob, ma, umi_list)
             logger.debug("merge_umis: final counts: %s" % umi_well[read].umi)
+        tot_diff_umis_after += len(umi_list)
+        if len(umi_list.keys()) < len(umi_well[read].umi.keys()):
+            num_umis_red += 1
         umi_well[read].umi = umi_list
+    logger.info("total different umis per position before: %s" % tot_diff_umis_before)
+    logger.info("total different umis per position after: %s" % tot_diff_umis_after)
+    logger.info("total position with reduced UMIs: %s" % num_umis_red)
     return umi_well
 
 
@@ -203,14 +213,15 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Get UMIs stats")
     parser.add_argument("--counts-umi", required=True,
                         help="file from umi_stats.py")
-    parser.add_argument("--log", "debug mode"),
+    parser.add_argument("--log", help = "debug mode", action='store_true'),
     parser.add_argument("--only-stats",
                         help="stats about edit distance among UMIs from same position",
                         action='store_true')
     args = parser.parse_args()
-    numeric_level = getattr(logging, args.log.upper(), None)
     if not args.log:
         numeric_level = getattr(logging, "INFO", None)
+    else:
+        numeric_level = getattr(logging, "DEBUG", None)
     logging.basicConfig(level=numeric_level)
     umi_well = get_umi_well(args.counts_umi)
     if args.only_stats:
