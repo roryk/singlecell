@@ -20,6 +20,7 @@ class readsInWell:
 
 
 def get_umi_well(in_file):
+    """create object with UMI-pos-well-gene information"""
     umi_well = {}
     with gzip.open(in_file, 'rb') as in_handle:
         for l in in_handle:
@@ -51,38 +52,23 @@ def merge_umis(umi_well):
     for read in umi_well:
         umi_list = Counter(umi_well[read].umi)
         logger.debug("merge_umis: popular %s" % [read[1], umi_well[read].gene])
-        logger.debug("related umi to a position: %s" % umi_list.keys())
+        logger.debug("merge_umis: related umi to a position: %s" % umi_list.keys())
+        logger.debug("merge_umis: initial counts: %s" % umi_list)
         ma = calculate_matrix_distance(umi_list.keys())
         prob = most_voted_umi(ma, umi_list)
         if prob:
-            umi_well[read].umi = calc_num_umi(prob, ma, umi_list)
-            #logger.debug("%s" % " ".join(map(str, [read[1], umi_well[read].gene,
-            #                                        popular, max_count, umi_list[max_count],
-            #                                        min_count, umi_list[min_count]])))
+            logger.debug("merge_umis: conflict")
+            umi_list = calc_num_umi(prob, ma, umi_list)
+            logger.debug("merge_umis: final counts: %s" % umi_well[read].umi)
     umi_well[read].umi = umi_list
     return umi_well
 
 
-def get_order(pairs, popular):
-    """return ordered umis according to counts"""
-    if pairs[0] in popular:
-        return pairs[0], pairs[1]
-    else:
-        return pairs[1], pairs[0]
-
-
 def most_voted_umi(ma, umi):
-    """get the matrix distance and select the umi most vote
-    to merge the rest with it"""
+    """get the matrix distance and select the umi most probable
+    real UMIs to merge the rest with it"""
     if len(ma) > 0:
-        iamerror, iamreal = Counter(), Counter()
-        for pair in ma:
-            if ma[pair] == 9:
-                for p in pair:
-                    if umi[p] == 1:
-                        iamerror[p] += 1
-                    else:
-                        iamreal[p] += 1
+        iamerror, iamreal = who_is_error_real(ma, umi)
         logger.debug("most_voted_umi: real %s" % iamreal)
         logger.debug("most_voted_umi: error %s" % iamerror)
         prob = get_error_prob(iamerror, iamreal)
@@ -91,6 +77,25 @@ def most_voted_umi(ma, umi):
             prob = get_decision(prob, ma, umi)
             logger.debug("most_voted_umi: final probabilities %s" % prob)
             return prob
+
+
+def who_is_error_real(ma, umi):
+    """count the times a UMI is an error and real. In case
+    all are as errors because the counts are 1,
+    just choose the first UMI in the list"""
+    iamerror, iamreal = Counter(), Counter()
+    for pair in ma:
+        if ma[pair] >= 9:
+            for p in pair:
+                if umi[p] == 1:
+                    iamerror[p] += 1
+                else:
+                    iamreal[p] += 1
+    if len(iamreal.keys()) == 0 and len(iamerror.keys()) > 0:
+        first = iamerror.keys()[0]
+        iamreal[first] = 1
+        del iamerror[first]
+    return iamerror, iamreal
 
 
 def get_error_prob(e, r):
@@ -102,7 +107,8 @@ def get_error_prob(e, r):
 
 
 def get_decision(p, ma, umi, need_decide=False):
-    """decide real or error"""
+    """decide real or error, only problems when
+    a UMI is error and real at the same time"""
     num_umi = calc_num_umi(p, ma, umi)
     logger.debug("decide: umis %s" % num_umi)
     if len([v for v in p.values() if v != 1 and v != 0]) > 0:
@@ -127,16 +133,40 @@ def get_decision(p, ma, umi, need_decide=False):
     return p
 
 
+def solve_conflict_known_states(p, ma, umi):
+    """from the set of real and error UMIs with 1 probabilities
+    to be real/error, make sure makes sense. Like, if one is
+    error can not be real, and otherwise"""
+    umi_conflict = count_conflict(p, ma)
+    p_change = copy.deepcopy(p)
+    seen_umi = set()
+    if len(umi_conflict) > 0:
+        make_sense = 0
+    while not make_sense:
+        try_umi = umi_conflict.most_common(1)
+        p_change[try_umi] = 0.5
+        new_umi_conflict = count_conflict(p_change, ma)
+        if len(new_umi_conflict) == 0:
+            make_sense = 1
+        else:
+            p_change[try_umi] = p[try_umi]
+            seen_umi.add(try_umi)
+
+
+def count_conflict(p, ma):
+    return True
+
+
 def calc_num_umi(p, ma, umi):
     for pair in ma:
         if p[pair[0]] == 0 and p[pair[1]] == 1:
+            logger.debug("calc_num_umi: %s" % [pair[0], umi[pair[0]], pair[1], umi[pair[1]]])
             umi[pair[0]] += umi[pair[1]]
             del umi[pair[1]]
-            logger.debug("calc_num_umi: %s" % [pair[0], umi[pair[0]], pair[1], umi[pair[1]]])
         elif p[pair[1]] == 0 and p[pair[0]] == 1:
+            logger.debug("calc_num_umi: %s" % [pair[1], umi[pair[1]], pair[0], umi[pair[0]]])
             umi[pair[1]] += umi[pair[0]]
             del umi[pair[0]]
-            logger.debug("calc_num_umi: %s" % [pair[1], umi[pair[1]], pair[0], umi[pair[0]]])
     return umi
 
 
@@ -151,7 +181,7 @@ def calculate_matrix_distance(umis_pos):
 
 def distance(u1, u2):
     """calculate distance"""
-    score = sum([1 for nt1, nt2 in zip(u1, u2) if nt1 == nt2])
+    score = sum([1 for nt1, nt2 in zip(u1, u2) if nt1 == nt2 or (nt1 == "N" or nt2 =="N")])
     logger.debug("distance: %s" % [u1, u2, score])
     return score
 
