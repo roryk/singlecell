@@ -7,10 +7,6 @@ from collections import OrderedDict, defaultdict, Counter
 from singlecell.utils import file_transaction
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
-logger.addHandler(handler)
 
 
 class readsInWell:
@@ -60,7 +56,7 @@ def merge_umis(umi_well):
             logger.debug("merge_umis: conflict")
             umi_list = calc_num_umi(prob, ma, umi_list)
             logger.debug("merge_umis: final counts: %s" % umi_well[read].umi)
-    umi_well[read].umi = umi_list
+        umi_well[read].umi = umi_list
     return umi_well
 
 
@@ -207,10 +203,15 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Get UMIs stats")
     parser.add_argument("--counts-umi", required=True,
                         help="file from umi_stats.py")
+    parser.add_argument("--log", "debug mode"),
     parser.add_argument("--only-stats",
                         help="stats about edit distance among UMIs from same position",
                         action='store_true')
     args = parser.parse_args()
+    numeric_level = getattr(logging, args.log.upper(), None)
+    if not args.log:
+        numeric_level = getattr(logging, "INFO", None)
+    logging.basicConfig(level=numeric_level)
     umi_well = get_umi_well(args.counts_umi)
     if args.only_stats:
         write_summary(umi_well)
