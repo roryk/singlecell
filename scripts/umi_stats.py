@@ -45,9 +45,8 @@ def write_summary(umi_well):
 
 def merge_umis(umi_well):
     """merge umis with 1-edit-distance on the same genome position"""
-    num_umis_red = 0
-    tot_diff_umis_before = 0
-    tot_diff_umis_after = 0
+    num_umis_red, num_umis_ori = 0, 0
+    tot_diff_umis_before, tot_diff_umis_after = 0, 0
     for read in umi_well:
         umi_list = Counter(umi_well[read].umi)
         tot_diff_umis_before += len(umi_list)
@@ -63,10 +62,13 @@ def merge_umis(umi_well):
         tot_diff_umis_after += len(umi_list)
         if len(umi_list.keys()) < len(umi_well[read].umi.keys()):
             num_umis_red += 1
+        else:
+            num_umis_ori += 1
         umi_well[read].umi = umi_list
-    logger.info("total different umis per position before: %s" % tot_diff_umis_before)
-    logger.info("total different umis per position after: %s" % tot_diff_umis_after)
+    logger.info("total different umis-well-pos before: %s" % tot_diff_umis_before)
+    logger.info("total different umis-well-pos after: %s" % tot_diff_umis_after)
     logger.info("total position with reduced UMIs: %s" % num_umis_red)
+    logger.info("total position with original UMIs: %s" % num_umis_ori)
     return umi_well
 
 
@@ -196,8 +198,8 @@ def gene_counts(umi_well):
     """summarize by gene and umi and well"""
     counts = defaultdict(Counter) 
     for read in umi_well:
-        for umi in umi_well[read].umi.keys():
-            counts[(umi_well[read].gene, read[1])] = umi_well[read].umi
+        umi_list = umi_well[read].umi
+        counts[(umi_well[read].gene, read[1])].update(umi_list)
     return counts
 
 
