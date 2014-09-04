@@ -29,18 +29,20 @@ def get_umi_well(in_file):
     return umi_well
 
 
-def write_summary(umi_well):
+def write_summary(umi_well, out_file):
     """write summary about edit distance among same read position"""
-    for read in umi_well:
-        umi_list = Counter(umi_well[read].umi)
-        ma = calculate_matrix_distance(umi_list.keys())
-        for pair in ma:
-            max_umi, min_umi = pair[1], pair[0]
-            if umi_list[pair[0]] > umi_list[pair[1]]:
-                max_umi, min_umi = pair[0], pair[1]
-            print "%s" % (" ".join(map(str, [read[0], read[1],
-                                       umi_list[max_umi], umi_list[min_umi],
-                                       ma[pair]])))
+    with file_transaction(out_file) as tx_out_file:
+        with gzip.open(tx_out_file, 'wb') as out_handle:
+            for read in umi_well:
+                umi_list = Counter(umi_well[read].umi)
+                ma = calculate_matrix_distance(umi_list.keys())
+                for pair in ma:
+                    max_umi, min_umi = pair[1], pair[0]
+                    if umi_list[pair[0]] > umi_list[pair[1]]:
+                        max_umi, min_umi = pair[0], pair[1]
+                    out_handle.write("%s\n" % (" ".join(map(str, [read[0], read[1],
+                                               umi_list[max_umi], umi_list[min_umi],
+                                               ma[pair]]))))
 
 
 def merge_umis(umi_well):
@@ -203,6 +205,23 @@ def gene_counts(umi_well):
     return counts
 
 
+def pos_counts(umi_well):
+    """summarize by gene and umi and well"""
+    counts = defaultdict(Counter)
+    for read in umi_well:
+        umi_list = umi_well[read].umi
+        counts[(umi_well[read].gene, read[1], read[0])].update(umi_list)
+    return counts
+
+
+def write_extensive_summary_by_pos(well_umi_gen, out_file):
+    with file_transaction(out_file) as tx_out_file:
+        with gzip.open(tx_out_file, 'wb') as out_handle:
+            well_umi_gen_str = [[("\t%s\t%s\t%s\t" % (gen_well[0], gen_well[1], gen_well[2])).join(map(str, umi)) for umi in well_umi_gen[gen_well].items()] for gen_well in well_umi_gen]
+            out_handle.write("\n".join(["\n".join(item) for item in well_umi_gen_str]))
+            out_handle.write("\n")
+
+
 def write_extensive_summary(well_umi_gen, out_file):
     with file_transaction(out_file) as tx_out_file:
         with gzip.open(tx_out_file, 'wb') as out_handle:
@@ -215,9 +234,15 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Get UMIs stats")
     parser.add_argument("--counts-umi", required=True,
                         help="file from umi_stats.py")
-    parser.add_argument("--log", help = "debug mode", action='store_true'),
-    parser.add_argument("--only-stats",
+    parser.add_argument("--log", help="debug mode", action='store_true'),
+    parser.add_argument("--before-stats",
                         help="stats about edit distance among UMIs from same position",
+                        action='store_true')
+    parser.add_argument("--after-stats",
+                        help="stats about edit distance among UMIs from same position",
+                        action='store_true')
+    parser.add_argument("--out-bypos",
+                        help="output will be by position",
                         action='store_true')
     args = parser.parse_args()
     if not args.log:
@@ -225,12 +250,18 @@ if __name__ == "__main__":
     else:
         numeric_level = getattr(logging, "DEBUG", None)
     logging.basicConfig(level=numeric_level)
+    base, _ = os.path.splitext(args.counts_umi)
     umi_well = get_umi_well(args.counts_umi)
-    if args.only_stats:
-        write_summary(umi_well)
+    if args.before_stats:
+        write_summary(umi_well, base + "_before_stats.gz")
+    umi_well = merge_umis(umi_well)
+    if args.after_stats:
+        write_summary(umi_well, base + "_after_stats.gz")
+    if args.out_bypos:
+        well_umi_pos = pos_counts(umi_well)
+        write_extensive_summary_by_pos(well_umi_pos, base + "_reduced_by_gene.gz")
     else:
-        umi_well = merge_umis(umi_well)
         well_umi_gen = gene_counts(umi_well)
-        base, _ = os.path.splitext(args.counts_umi)
-        write_extensive_summary(well_umi_gen, base + "_reduced.gz")
+        write_extensive_summary(well_umi_gen, base + "_reduced_by_pos.gz")
+
 
